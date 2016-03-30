@@ -1,5 +1,7 @@
 theory/
 proto/
+datasets/
 __pycache__/
+.idea/
 *.py[cod]
 *$py.class
