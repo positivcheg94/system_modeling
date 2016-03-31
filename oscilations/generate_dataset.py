@@ -17,5 +17,5 @@ for i in range(len(coefs)):
 X = np.array(X).T
 y = X.dot(coefs)
 
-DataFrame(data=X).to_csv('-'.join(['./X',name,str(N)])+'.csv',header=False,index=False)
-DataFrame(data=y).to_csv('-'.join(['./Y',name,str(N)])+'.csv',header=False,index=False)
+DataFrame(data=X).to_csv('-'.join(['./datasets/X',name,str(N)])+'.csv',header=False,index=False)
+DataFrame(data=y).to_csv('-'.join(['./datasets/Y',name,str(N)])+'.csv',header=False,index=False)

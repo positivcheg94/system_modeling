@@ -1,3 +1,7 @@
+#! /usr/bin/python
+
+from itertools import chain
+
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 import numpy as np
@@ -18,6 +22,8 @@ CONST_F = "f(t)"
 CONST_N = "Number of measures"
 CONST_SIGMA = "σ"
 CONST_PRECISION = "Precision"
+
+CONST_COSTIL_AMPLIFIER = 2
 
 t_symbol = Symbol('t')
 
@@ -280,6 +286,9 @@ class MainWindow(QWidget):
 
             _X = np.array(_X)
             _Y = np.array(_Y)
+
+            #pd.DataFrame(_X).to_excel('./X.xlsx',header=False,index=False)
+            #pd.DataFrame(_Y).to_excel('./Y.xlsx',header=False,index=False)
             round_sigfigs_array(_X, significant_digits)
             round_sigfigs_array(_Y, significant_digits)
 
@@ -287,6 +296,7 @@ class MainWindow(QWidget):
             for params in lso(_X, _Y):
                 pass
 
+            print("Estimated params "+str(params[0])+'\nrss='+str(params[1]))
             msg = QMessageBox()
             msg.setText("Estimated params " +
                         str(params[0]) + '\nrss=' + str(params[1]))
@@ -330,6 +340,8 @@ class MainWindow(QWidget):
                 cp.append(curr_rss + 2 * s)
                 fpe.append(curr_rss * (n + s) / (n - s))
                 s += 1
+            fpe[-1] = max(chain(cp,fpe[:-1]))*CONST_COSTIL_AMPLIFIER
+
             pen_yellow = pg.mkPen(color='#FFFF00', width=2)
             pen_green = pg.mkPen(color='#00FF00', width=2)
             pen_blue = pg.mkPen(color='#0000FF', width=2)
