@@ -27,9 +27,11 @@ CONST_COSTIL_AMPLIFIER = 2
 
 t_symbol = Symbol('t')
 
-CONST_TIME_SIMULATING = 300
-CONST_N_LINSPACE = 1000
+CONST_TIME_SIMULATING = 30
+CONST_N_LINSPACE = 10000
 CONST_h_VALUE = CONST_TIME_SIMULATING / CONST_N_LINSPACE
+
+CONST_MINIMUM_SAMPLES = 3
 
 CONST_FIRST_WIDGET_NAME = "Forced"
 CONST_SECOND_WIDGET_NAME = "MNKO diff"
@@ -179,9 +181,10 @@ class ParamPicker(QWidget):
 
 class MainWindow(QWidget):
 
-    def __init__(self, parent=None):
+    def __init__(self, console_prints = False, parent=None):
         super().__init__(parent)
 
+        self._console_prints = console_prints
         self._axis_pen = pg.mkPen('r')
         self._default_line_pen = pg.mkPen(color='#0C27D9', width=2)
         self._plot_background = pg.mkBrush(color='#bfbfbf')
@@ -264,54 +267,61 @@ class MainWindow(QWidget):
             f = make_f(zero, [params[CONST_OMEGA]**2, 2 * params[CONST_DELTA]])
             _x = odeint(f, x0, self._t).T[0]
 
-            _X = []
-            _Y = []
-            step = int(CONST_N_LINSPACE / (N + 1))
-            _vals = []
-            for i in range(step, N * step, step):
-                _vals.append(_x[i - 1:i + 2])
+            rss_to_plot = []
+            for n_samples in range(CONST_MINIMUM_SAMPLES,N):
+                _X = []
+                _Y = []
 
-            for i in _vals:
-                x_prev, x_curr, x_next = i
-                _X.append([x_curr, -d_f(x_prev, x_next, CONST_h_VALUE)])
-            if sigma > 0:
-                for i in _vals:
-                    x_prev, x_curr, x_next = i
-                    _Y.append(d2_f(x_prev, x_curr, x_next,
-                                   CONST_h_VALUE) + normal(loc=0.0, scale=sigma))
-            else:
-                for i in _vals:
-                    x_prev, x_curr, x_next = i
+                step = int(CONST_N_LINSPACE / (n_samples + 1))
+
+                for i in range(step, (n_samples + 1)* step, step):
+                    x_prev, x_curr, x_next = _x[i - 1:i + 2]
+                    _X.append([-x_curr, -d_f(x_prev, x_next, CONST_h_VALUE)])
                     _Y.append(d2_f(x_prev, x_curr, x_next, CONST_h_VALUE))
 
-            _X = np.array(_X)
-            _Y = np.array(_Y)
+                _X = np.array(_X)
+                _Y = np.array(_Y)
+                if sigma>0:
+                    _Y+=normal(loc=0.0, scale=sigma,size=len(_Y))
 
-            #pd.DataFrame(_X).to_excel('./X.xlsx',header=False,index=False)
-            #pd.DataFrame(_Y).to_excel('./Y.xlsx',header=False,index=False)
-            round_sigfigs_array(_X, significant_digits)
-            round_sigfigs_array(_Y, significant_digits)
 
-            params = None
-            for params in lso(_X, _Y):
-                pass
+                #pd.DataFrame(_X).to_excel('./X.xlsx',header=False,index=False)
+                #pd.DataFrame(_Y).to_excel('./Y.xlsx',header=False,index=False)
+                round_sigfigs_array(_X, significant_digits)
+                round_sigfigs_array(_Y, significant_digits)
 
-            print("Estimated params "+str(params[0])+'\nrss='+str(params[1]))
+                params = None
+                for params in lso(_X, _Y):
+                    pass
+
+                rss_to_plot.append(params[1])
+
+            self.__update_plot_left__(range(CONST_MINIMUM_SAMPLES,N),rss_to_plot)
+
+            if self._console_prints:
+                print("Estimated params "+str(params[0])+'\nrss='+str(params[1]))
+
             msg = QMessageBox()
-            msg.setText("Estimated params " +
-                        str(params[0]) + '\nrss=' + str(params[1]))
+            msg.setText("Estimated params "+str(params[0]) + '\nrss=' + str(params[1]))
             msg.exec()
         elif params['widget_name'] == CONST_THIRD_WIDGET_NAME:
             x_file = self._file_picker.get_x_file_name()
             y_file = self._file_picker.get_y_file_name()
 
             try:
-                _X = pd.read_csv(x_file).as_matrix()
+                if x_file.endswith('.csv'):
+                    _X = pd.read_csv(x_file).as_matrix()
+                else:
+                    _X = pd.read_excel(x_file).as_matrix()
             except Exception:
                 self._error_box.showMessage('First file does not exist')
                 return
             try:
-                _Y = pd.read_csv(y_file).as_matrix().flatten()
+
+                if y_file.endswith('.csv'):
+                    _Y = pd.read_csv(y_file).as_matrix().flatten()
+                else:
+                    _Y = pd.read_excel(y_file).as_matrix().flatten()
             except Exception:
                 self._error_box.showMessage('Second file does not exist')
                 return
@@ -324,29 +334,35 @@ class MainWindow(QWidget):
                 noise = normal(loc=0.0, scale=sigma, size=len(_Y))
                 _Y_with_noise = _Y + noise
 
-
-
             round_sigfigs_array(_X, significant_digits)
             round_sigfigs_array(_Y_with_noise, significant_digits)
 
-            n = _X.shape[1]
+            n = _X.shape[0]
+            m = _X.shape[1]
 
             rss = []
             cp = []
             fpe = []
-            s = np.int32(1)
-            for _,curr_rss in lso(_X, _Y_with_noise):
+            s = 1
+            params = None
+            for params,curr_rss in lso(_X, _Y_with_noise):
                 rss.append(curr_rss)
                 cp.append(curr_rss + 2 * s)
                 fpe.append(curr_rss * (n + s) / (n - s))
                 s += 1
-            fpe[-1] = max(chain(cp,fpe[:-1]))*CONST_COSTIL_AMPLIFIER
+
+            if self._console_prints:
+                print("Estimated params " + str(params) + '\nrss=' + str(curr_rss))
+
+            msg = QMessageBox()
+            msg.setText("Estimated params " + str(params) + '\nrss=' + str(curr_rss))
+            msg.exec()
 
             pen_yellow = pg.mkPen(color='#FFFF00', width=2)
             pen_green = pg.mkPen(color='#00FF00', width=2)
             pen_blue = pg.mkPen(color='#0000FF', width=2)
 
-            series = np.arange(1,n+1,1)
+            series = np.arange(1,m+1,1)
 
             self.__update_plot_left__(series,rss,pen=pen_yellow)
             self.__update_plot_left__(series,cp,pen=pen_green)

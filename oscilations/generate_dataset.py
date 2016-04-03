@@ -4,8 +4,8 @@ from pandas import DataFrame
 import numpy as np
 from numpy.random import uniform
 
-CONST_LEFT = -100
-CONST_RIGHT = 100
+CONST_LEFT = -1
+CONST_RIGHT = 1
 
 name = input("Dataset name\n")
 coefs = np.array([float(i) for i in input("Coefs\n").split()])
